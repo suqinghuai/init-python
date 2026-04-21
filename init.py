@@ -1,6 +1,9 @@
 import os
+import shutil
 import subprocess
 import sys
+import time
+import atexit
 
 
 def get_project_root():
@@ -13,12 +16,22 @@ def get_project_root():
         return os.path.dirname(os.path.abspath(__file__))
 
 
+def get_resource_path(filename: str) -> str:
+    """获取资源路径，兼容PyInstaller打包资源"""
+    if getattr(sys, 'frozen', False):
+        base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.executable)))
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, filename)
+
+
 # 项目根目录
 PROJECT_ROOT = get_project_root()
 # 虚拟环境名称
 VENV_NAME = "venv"
 # 阿里云镜像源
 ALIYUN_MIRROR = "https://mirrors.aliyun.com/pypi/simple/"
+ICON_NAME = "my.ico"
 
 
 def create_venv():
@@ -43,6 +56,26 @@ def create_venv():
         print("虚拟环境创建成功！")
     except subprocess.CalledProcessError as e:
         print(f"创建虚拟环境失败: {e.stderr}")
+        sys.exit(1)
+
+
+def ensure_runtime_icon():
+    """运行时确保my.ico存在（打包后从资源中释放）"""
+    target_path = os.path.join(PROJECT_ROOT, ICON_NAME)
+
+    if os.path.exists(target_path):
+        return
+
+    source_path = get_resource_path(ICON_NAME)
+    if not os.path.exists(source_path):
+        print(f"未找到图标资源: {source_path}")
+        return
+
+    try:
+        shutil.copyfile(source_path, target_path)
+        print("my.ico已创建")
+    except Exception as e:
+        print(f"创建my.ico失败: {e}")
         sys.exit(1)
 
 
@@ -154,15 +187,15 @@ def create_readme():
 
 ## 项目介绍
 
-
+请你仔细阅读完整个项目之后，根据README.md文档现有的结构，帮我完善并写入README.md文档。
 
 ## 快速开始
 
-### 面向使用者
+### 面向使用者(使用exe文件)
 
 
 
-### 面向开发者
+### 面向开发者（从源码运行）
 ```bash
 # 克隆项目
 git clone <项目地址>
@@ -188,6 +221,7 @@ pip install -r requirements.txt
 
 ## 许可证
 
+本项目采用 Prosperity Public License 2.0.0 许可证，详见 LICENSE 文件。
 
 
 """
@@ -248,6 +282,43 @@ This software comes as is, without any warranty at all. As far as the law allows
         sys.exit(1)
 
 
+def delete_self():
+    """删除脚本自身（init.exe）"""
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的exe文件
+        exe_path = sys.executable
+        print(f"准备删除自身: {exe_path}")
+        
+        # 使用批处理文件延迟删除
+        try:
+            # 创建批处理文件
+            bat_content = f"""@echo off
+chcp 65001 >nul
+timeout /t 1 /nobreak >nul
+del /f /q "{exe_path}"
+if exist "{exe_path}" (
+    echo 删除失败，请手动删除: {exe_path}
+) else (
+    echo 删除成功
+)
+del /f /q "%~f0"
+"""
+            
+            bat_path = os.path.join(PROJECT_ROOT, "delete_self.bat")
+            with open(bat_path, "w", encoding="utf-8") as f:
+                f.write(bat_content)
+            
+            # 启动批处理文件并退出当前进程
+            subprocess.Popen([bat_path], shell=True, cwd=PROJECT_ROOT)
+            
+        except Exception as e:
+            print(f"创建删除脚本失败: {e}")
+            print(f"请手动删除: {exe_path}")
+    else:
+        # 如果是源码运行，不删除
+        print("源码模式运行，跳过自删除")
+
+
 def install_pyinstaller():
     """安装pyinstaller库"""
     print("正在安装pyinstaller库...")
@@ -304,32 +375,47 @@ def press_any_key_to_exit():
 
 def main():
     """主函数"""
-    print("开始初始化Python项目...")
-    print(f"项目根目录: {PROJECT_ROOT}")
-    
-    # 1. 创建虚拟环境
-    create_venv()
-    
-    # 2. 设置阿里云镜像源
-    set_aliyun_mirror()
-    
-    # 3. 复制.gitignore文件
-    copy_gitignore()
-    
-    # 4. 创建requirements.txt文件
-    create_requirements()
-    
-    # 5. 创建README.md文件
-    create_readme()
-    
-    # 6. 创建LICENSE文件
-    create_license()
-    
-    # 7. 安装pyinstaller
-    install_pyinstaller()
-    
-    print("\n项目初始化完成！")
-    press_any_key_to_exit()
+    try:
+        print("开始初始化Python项目...")
+        print(f"项目根目录: {PROJECT_ROOT}")
+
+        # 0. 运行时确保图标文件存在
+        ensure_runtime_icon()
+        
+        # 1. 创建虚拟环境
+        create_venv()
+        
+        # 2. 设置阿里云镜像源
+        set_aliyun_mirror()
+        
+        # 3. 复制.gitignore文件
+        copy_gitignore()
+        
+        # 4. 创建requirements.txt文件
+        create_requirements()
+        
+        # 5. 创建README.md文件
+        create_readme()
+        
+        # 6. 创建LICENSE文件
+        create_license()
+        
+        # 7. 安装pyinstaller
+        install_pyinstaller()
+        
+        print("\n项目初始化完成！")
+        print("下一步操作:")
+        print("1. 激活虚拟环境: venv\\Scripts\\activate (Windows) 或 source venv/bin/activate (Linux/Mac)")
+        print("2. 安装依赖: pip install -r requirements.txt")
+        
+        # 注册退出时删除自身
+        atexit.register(delete_self)
+        
+        press_any_key_to_exit()
+        
+    except Exception as e:
+        print(f"初始化过程中发生错误: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
