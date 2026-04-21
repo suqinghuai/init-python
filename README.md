@@ -56,7 +56,7 @@ pip install -r requirements.txt
 python init.py
 
 # 打包为 exe（可选）
-pyinstaller --onefile init.py
+python -m PyInstaller --onefile --icon my.ico --add-data "my.ico;." init.py
 ```
 
 ## 实现方法
