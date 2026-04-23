@@ -282,6 +282,24 @@ This software comes as is, without any warranty at all. As far as the law allows
         sys.exit(1)
 
 
+def create_main_py():
+    """创建main.py空文件"""
+    print("正在创建main.py文件...")
+    main_path = os.path.join(PROJECT_ROOT, "main.py")
+
+    if os.path.exists(main_path):
+        print("main.py文件已存在，跳过创建步骤")
+        return
+
+    try:
+        with open(main_path, "w", encoding="utf-8"):
+            pass
+        print("main.py文件创建成功！")
+    except Exception as e:
+        print(f"创建main.py文件失败: {e}")
+        sys.exit(1)
+
+
 def delete_self():
     """删除脚本自身（init.exe）"""
     if getattr(sys, 'frozen', False):
@@ -400,7 +418,10 @@ def main():
         # 6. 创建LICENSE文件
         create_license()
         
-        # 7. 安装pyinstaller
+        # 7. 创建main.py空文件
+        create_main_py()
+
+        # 8. 安装pyinstaller
         install_pyinstaller()
         
         print("\n项目初始化完成！")
@@ -411,7 +432,7 @@ def main():
         # 注册退出时删除自身
         atexit.register(delete_self)
         
-        press_any_key_to_exit()
+        return
         
     except Exception as e:
         print(f"初始化过程中发生错误: {e}")
